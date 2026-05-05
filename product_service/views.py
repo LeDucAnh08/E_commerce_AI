@@ -2,7 +2,7 @@ import json
 
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import Book, Category, Electronics, Fashion, Product
@@ -320,3 +320,15 @@ def categories_collection(request):
     category, created = Category.objects.get_or_create(name=name)
     status = 201 if created else 200
     return JsonResponse({"id": category.id, "name": category.name}, status=status)
+
+
+def shop_home(request):
+    return render(request, "product_service/home.html")
+
+
+def cart_page(request):
+    return render(request, "product_service/cart.html")
+
+
+def checkout_page(request):
+    return render(request, "product_service/checkout.html")

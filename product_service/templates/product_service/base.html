@@ -1,0 +1,39 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}NovaMart{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'product_service/css/shop.css' %}" />
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <div class="brand">
+            <span class="brand-mark">NM</span>
+            <div>
+                <div class="brand-name">NovaMart</div>
+                <div class="brand-tag">Premium marketplace</div>
+            </div>
+        </div>
+        <nav class="site-nav">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/cart/ui/" class="nav-link">Cart</a>
+            <a href="/checkout/" class="nav-link">Checkout</a>
+        </nav>
+        <div class="token-box">
+            <input id="accessToken" type="password" placeholder="Access token" autocomplete="off" />
+            <button id="saveToken" class="btn ghost">Save</button>
+        </div>
+    </header>
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+        <div>NovaMart Commerce Suite</div>
+        <div class="footer-meta">Secure orders · Fast fulfillment · Trusted brands</div>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

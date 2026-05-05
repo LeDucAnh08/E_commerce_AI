@@ -1,0 +1,60 @@
+{% extends "product_service/base.html" %}
+
+{% block title %}NovaMart | Home{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <p class="eyebrow">New season arrivals</p>
+        <h1>Shop curated essentials built for modern life.</h1>
+        <p class="hero-sub">Explore premium categories, add items to your cart, and place orders in seconds.</p>
+        <div class="hero-actions">
+            <a href="#catalog" class="btn primary">Browse catalog</a>
+            <a href="/cart/ui/" class="btn ghost">View cart</a>
+        </div>
+    </div>
+    <div class="hero-card">
+        <div class="metric">
+            <span class="metric-value">120+</span>
+            <span class="metric-label">Verified brands</span>
+        </div>
+        <div class="metric">
+            <span class="metric-value">24h</span>
+            <span class="metric-label">Dispatch window</span>
+        </div>
+        <div class="metric">
+            <span class="metric-value">4.9</span>
+            <span class="metric-label">Customer rating</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel" id="catalog">
+    <div class="panel-header">
+        <div>
+            <h2>Categories</h2>
+            <p>Pick a lane, then dive into the collection.</p>
+        </div>
+        <div class="filter-bar">
+            <button class="pill active" data-category="">All</button>
+            <div id="categoryPills" class="pill-group"></div>
+        </div>
+    </div>
+    <div id="productGrid" class="product-grid"></div>
+</section>
+
+<section class="panel cart-preview">
+    <div class="panel-header">
+        <div>
+            <h2>Cart preview</h2>
+            <p>Keep track of the items you plan to order.</p>
+        </div>
+        <a class="btn ghost" href="/cart/ui/">Open cart</a>
+    </div>
+    <div id="cartPreview" class="cart-items"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'product_service/js/shop.js' %}"></script>
+{% endblock %}

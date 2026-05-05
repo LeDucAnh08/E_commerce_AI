@@ -1,0 +1,25 @@
+{% extends "product_service/base.html" %}
+
+{% block title %}NovaMart | Checkout{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Checkout</h2>
+            <p>Review the order, then submit payment.</p>
+        </div>
+        <a href="/cart/ui/" class="btn ghost">Back to cart</a>
+    </div>
+    <div id="orderSummary" class="checkout-summary"></div>
+    <div class="checkout-actions">
+        <button id="createOrder" class="btn ghost">Create order from cart</button>
+        <button id="payNow" class="btn primary">Pay now</button>
+    </div>
+    <div id="paymentStatus" class="status-box"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'product_service/js/checkout.js' %}"></script>
+{% endblock %}
