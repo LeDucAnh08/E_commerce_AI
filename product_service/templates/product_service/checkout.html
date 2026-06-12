@@ -1,4 +1,5 @@
 {% extends "product_service/base.html" %}
+{% load static %}
 
 {% block title %}NovaMart | Checkout{% endblock %}
 
@@ -12,14 +13,30 @@
         <a href="/cart/ui/" class="btn ghost">Back to cart</a>
     </div>
     <div id="orderSummary" class="checkout-summary"></div>
+    <form class="shipping-form" id="shippingForm">
+        <label>
+            <span>Shipping address</span>
+            <textarea id="shippingAddress" rows="3" placeholder="Enter delivery address" required></textarea>
+        </label>
+        <label>
+            <span>Shipping method</span>
+            <select id="shippingMethod" required>
+                <option value="standard">Standard - 3 to 5 days - $5.00</option>
+                <option value="express">Express - 1 to 2 days - $12.00</option>
+                <option value="same_day">Same day - today - $25.00</option>
+            </select>
+        </label>
+        <div id="shippingEstimate" class="status-box"></div>
+    </form>
     <div class="checkout-actions">
         <button id="createOrder" class="btn ghost">Create order from cart</button>
         <button id="payNow" class="btn primary">Pay now</button>
+        <a id="trackOrderLink" class="btn ghost" href="/shipping/track/" hidden>Track shipping</a>
     </div>
     <div id="paymentStatus" class="status-box"></div>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'product_service/js/checkout.js' %}"></script>
+<script src="{% static 'product_service/js/checkout.js' %}?v=paid-orders-1"></script>
 {% endblock %}

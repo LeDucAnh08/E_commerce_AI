@@ -1,4 +1,5 @@
 {% extends "product_service/base.html" %}
+{% load static %}
 
 {% block title %}NovaMart | Home{% endblock %}
 
@@ -40,6 +41,10 @@
             <div id="categoryPills" class="pill-group"></div>
         </div>
     </div>
+    <form id="aiSearchForm" class="ai-search">
+        <input id="aiSearchInput" type="search" placeholder="Search with AI, e.g. laptop, books, Sony" />
+        <button class="btn primary" type="submit">Search</button>
+    </form>
     <div id="productGrid" class="product-grid"></div>
 </section>
 
@@ -52,9 +57,13 @@
         <a class="btn ghost" href="/cart/ui/">Open cart</a>
     </div>
     <div id="cartPreview" class="cart-items"></div>
+    <div class="recommendation-panel">
+        <div class="recommendation-title">Frequently bought together</div>
+        <div id="cartRecommendations" class="recommendation-grid"></div>
+    </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'product_service/js/shop.js' %}"></script>
+<script src="{% static 'product_service/js/shop.js' %}?v=ai-recommendations-1"></script>
 {% endblock %}

@@ -52,6 +52,7 @@ def _serialize_shipment(shipment: Shipment) -> dict:
         "id": shipment.id,
         "order_id": shipment.order_id,
         "address": shipment.address,
+        "shipping_method": shipment.shipping_method,
         "status": shipment.status,
     }
 
@@ -82,9 +83,14 @@ def create_shipment(request):
     if not address:
         return _bad_request("Missing address")
 
+    shipping_method = data.get("shipping_method", Shipment.METHOD_STANDARD)
+    if shipping_method not in {choice[0] for choice in Shipment.METHOD_CHOICES}:
+        return _bad_request("Invalid shipping_method")
+
     shipment = Shipment.objects.create(
         order_id=order_id,
         address=address,
+        shipping_method=shipping_method,
         status=Shipment.STATUS_PROCESSING,
     )
 

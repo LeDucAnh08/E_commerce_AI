@@ -14,6 +14,7 @@ def _serialize_product(product: Product) -> dict:
         "name": product.name,
         "price": product.price,
         "stock": product.stock,
+        "image_url": product.image_url,
         "category": product.category.name,
         "type": None,
         "details": None,
@@ -140,6 +141,7 @@ def products_collection(request):
     name = data.get("name")
     category_name = data.get("category")
     product_type = data.get("type")
+    image_url = data.get("image_url", "")
     details = data.get("details") or {}
 
     try:
@@ -169,6 +171,7 @@ def products_collection(request):
             name=name,
             price=price,
             stock=stock,
+            image_url=image_url,
             category=category,
         )
 
@@ -236,6 +239,9 @@ def product_detail(request, product_id: int):
                 product.stock = int(data["stock"])
             except (TypeError, ValueError):
                 return _bad_request("Invalid stock")
+
+        if "image_url" in data:
+            product.image_url = data["image_url"] or ""
 
         if "category" in data:
             category_name = data["category"]
@@ -326,9 +332,25 @@ def shop_home(request):
     return render(request, "product_service/home.html")
 
 
+def login_page(request):
+    return render(request, "product_service/login.html")
+
+
 def cart_page(request):
     return render(request, "product_service/cart.html")
 
 
+def product_detail_page(request, product_id: int):
+    return render(
+        request,
+        "product_service/product_detail.html",
+        {"product_id": product_id},
+    )
+
+
 def checkout_page(request):
     return render(request, "product_service/checkout.html")
+
+
+def shipping_tracking_page(request):
+    return render(request, "product_service/shipping_tracking.html")

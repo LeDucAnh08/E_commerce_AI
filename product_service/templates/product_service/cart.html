@@ -1,4 +1,5 @@
 {% extends "product_service/base.html" %}
+{% load static %}
 
 {% block title %}NovaMart | Cart{% endblock %}
 
@@ -22,9 +23,13 @@
         </div>
         <button id="placeOrder" class="btn primary">Place order</button>
     </div>
+    <div class="recommendation-panel">
+        <div class="recommendation-title">Frequently bought together</div>
+        <div id="cartRecommendations" class="recommendation-grid"></div>
+    </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'product_service/js/cart.js' %}"></script>
+<script src="{% static 'product_service/js/cart.js' %}?v=ai-recommendations-1"></script>
 {% endblock %}

@@ -1,0 +1,24 @@
+{% extends "product_service/base.html" %}
+{% load static %}
+
+{% block title %}NovaMart | Track shipping{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Shipping status</h2>
+            <p>Track shipping for orders after payment.</p>
+        </div>
+        <a href="/checkout/" class="btn ghost">Checkout</a>
+    </div>
+
+    <div id="trackingResult" class="tracking-result">
+        <div class="empty">Loading orders...</div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'product_service/js/shipping_tracking.js' %}?v=paid-orders-1"></script>
+{% endblock %}

@@ -4,6 +4,9 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from order_service.models import OrderItem
+from product_service.models import Product
+
 from .hybrid_recommender import generate_hybrid_recommendations
 from .lstm.models import UserBehavior
 
@@ -44,6 +47,170 @@ def _build_reason(scores: dict) -> str:
     if strong:
         return strong[0]
     return "+".join(name for name, _ in components[:2])
+
+
+def _parse_limit(value, default: int = 5, maximum: int = 20) -> int:
+    try:
+        limit = int(value or default)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(limit, maximum))
+
+
+def _ordered_ids(queryset) -> list[int]:
+    return [int(product_id) for product_id in queryset.values_list("id", flat=True)]
+
+
+def _product_type(product: Product) -> str | None:
+    if hasattr(product, "book_details"):
+        return "book"
+    if hasattr(product, "electronics_details"):
+        return "electronics"
+    if hasattr(product, "fashion_details"):
+        return "fashion"
+    return None
+
+
+def _similar_product_ids(product_id: int, limit: int) -> list[int]:
+    product = (
+        Product.objects.using("product")
+        .select_related("category")
+        .filter(id=product_id)
+        .first()
+    )
+    if not product:
+        return []
+
+    products = Product.objects.using("product").select_related("category").exclude(id=product_id)
+    product_type = _product_type(product)
+    if product_type == "book":
+        products = products.filter(book_details__isnull=False)
+    elif product_type == "electronics":
+        products = products.filter(electronics_details__isnull=False)
+    elif product_type == "fashion":
+        products = products.filter(fashion_details__isnull=False)
+
+    ids = _ordered_ids(products.filter(category=product.category).order_by("price")[:limit])
+    if len(ids) < limit:
+        fallback = (
+            Product.objects.using("product")
+            .exclude(id=product_id)
+            .exclude(id__in=ids)
+            .order_by("category__name", "price")[: limit - len(ids)]
+        )
+        ids.extend(_ordered_ids(fallback))
+    return ids[:limit]
+
+
+@csrf_exempt
+def search_products(request):
+    if request.method != "GET":
+        return _bad_request("Method not allowed", status=405)
+
+    query = str(request.GET.get("q", "")).strip()
+    limit = _parse_limit(request.GET.get("limit"), default=10)
+    if not query:
+        return _bad_request("Missing q")
+
+    products = Product.objects.using("product").select_related("category")
+    matches = (
+        products.filter(name__icontains=query)
+        | products.filter(category__name__icontains=query)
+        | products.filter(book_details__author__icontains=query)
+        | products.filter(electronics_details__brand__icontains=query)
+        | products.filter(fashion_details__color__icontains=query)
+    )
+    query_lower = query.lower()
+    category_aliases = {
+        "Books": {"book", "books", "sach", "sách"},
+        "Electronics": {
+            "electronics",
+            "dien tu",
+            "điện tử",
+            "laptop",
+            "notebook",
+            "keyboard",
+            "monitor",
+            "headphone",
+            "headphones",
+            "earbuds",
+            "tablet",
+        },
+        "Fashion": {"fashion", "thoi trang", "thời trang", "shirt", "hoodie", "sneaker", "jacket", "wallet"},
+    }
+    for category_name, aliases in category_aliases.items():
+        if any(alias in query_lower for alias in aliases):
+            matches = matches | products.filter(category__name=category_name)
+
+    product_ids = _ordered_ids(matches.distinct().order_by("category__name", "price")[:limit])
+    return JsonResponse({"query": query, "product_ids": product_ids})
+
+
+@csrf_exempt
+def frequently_bought_together(request):
+    if request.method != "GET":
+        return _bad_request("Method not allowed", status=405)
+
+    raw_product_ids = str(request.GET.get("product_ids", "")).strip()
+    limit = _parse_limit(request.GET.get("limit"), default=5)
+    try:
+        product_ids = {
+            int(value)
+            for value in raw_product_ids.split(",")
+            if value.strip()
+        }
+    except ValueError:
+        return _bad_request("Invalid product_ids")
+
+    if not product_ids:
+        return _bad_request("Missing product_ids")
+
+    order_ids = (
+        OrderItem.objects.using("default")
+        .filter(product_id__in=product_ids)
+        .values_list("order_id", flat=True)
+        .distinct()
+    )
+    co_items = (
+        OrderItem.objects.using("default")
+        .filter(order_id__in=order_ids)
+        .exclude(product_id__in=product_ids)
+        .values_list("product_id", flat=True)
+    )
+
+    scores: dict[int, int] = {}
+    for product_id in co_items:
+        scores[int(product_id)] = scores.get(int(product_id), 0) + 1
+
+    ranked_ids = [
+        product_id
+        for product_id, _ in sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    ][:limit]
+
+    if len(ranked_ids) < limit:
+        seed_product = Product.objects.using("product").filter(id__in=product_ids).first()
+        if seed_product:
+            fallback = (
+                Product.objects.using("product")
+                .filter(category=seed_product.category)
+                .exclude(id__in=set(ranked_ids) | product_ids)
+                .order_by("price")[: limit - len(ranked_ids)]
+            )
+            ranked_ids.extend(_ordered_ids(fallback))
+
+    return JsonResponse({"product_ids": ranked_ids[:limit]})
+
+
+@csrf_exempt
+def similar_products(request, product_id: int):
+    if request.method != "GET":
+        return _bad_request("Method not allowed", status=405)
+
+    limit = _parse_limit(request.GET.get("limit"), default=5)
+    product_ids = _similar_product_ids(product_id, limit)
+    if not product_ids:
+        return _bad_request("Product not found", status=404)
+    return JsonResponse({"product_id": product_id, "product_ids": product_ids})
 
 
 @csrf_exempt

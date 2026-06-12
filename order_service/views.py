@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from cart_service.models import Cart, CartItem
+from shipping_service.models import Shipment
 
 from .models import Order, OrderItem
 
@@ -61,6 +62,7 @@ def _require_admin_or_staff(payload: dict):
 
 
 def _serialize_order(order: Order) -> dict:
+    shipment = Shipment.objects.filter(order_id=order.id).order_by("-id").first()
     return {
         "id": order.id,
         "user_id": order.user_id,
@@ -74,6 +76,16 @@ def _serialize_order(order: Order) -> dict:
             }
             for item in order.items.all()
         ],
+        "shipment": (
+            {
+                "id": shipment.id,
+                "address": shipment.address,
+                "shipping_method": shipment.shipping_method,
+                "status": shipment.status,
+            }
+            if shipment
+            else None
+        ),
     }
 
 
@@ -104,6 +116,18 @@ def create_order_from_cart(request):
     if not cart or not cart.items.exists():
         return _bad_request("Cart is empty")
 
+    data, parse_error = _parse_json(request)
+    if parse_error:
+        return parse_error
+
+    shipping_address = str(data.get("shipping_address", "")).strip()
+    if not shipping_address:
+        return _bad_request("Missing shipping_address")
+
+    shipping_method = data.get("shipping_method", Shipment.METHOD_STANDARD)
+    if shipping_method not in {choice[0] for choice in Shipment.METHOD_CHOICES}:
+        return _bad_request("Invalid shipping_method")
+
     total_price = _calculate_cart_total(cart)
 
     with transaction.atomic():
@@ -122,6 +146,13 @@ def create_order_from_cart(request):
         _send_payment_request(order)
         order.status = "payment_requested"
         order.save(update_fields=["status"])
+
+        Shipment.objects.create(
+            order_id=order.id,
+            address=shipping_address,
+            shipping_method=shipping_method,
+            status=Shipment.STATUS_PROCESSING,
+        )
 
         CartItem.objects.filter(cart=cart).delete()
 

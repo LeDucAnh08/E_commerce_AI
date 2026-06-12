@@ -41,14 +41,14 @@ def _decode_token(token: str) -> dict | None:
 def _build_tokens(user: User) -> dict:
     now = datetime.now(tz=timezone.utc)
     access_payload = {
-        "sub": user.id,
+        "sub": str(user.id),
         "role": user.role,
         "type": "access",
         "iat": now,
         "exp": now + ACCESS_TOKEN_TTL,
     }
     refresh_payload = {
-        "sub": user.id,
+        "sub": str(user.id),
         "type": "refresh",
         "iat": now,
         "exp": now + REFRESH_TOKEN_TTL,

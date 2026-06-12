@@ -1,13 +1,12 @@
-const tokenField = document.getElementById("accessToken");
-const saveTokenButton = document.getElementById("saveToken");
 const cartList = document.getElementById("cartList");
 const cartTotal = document.getElementById("cartTotal");
 const clearCartButton = document.getElementById("clearCart");
 const placeOrderButton = document.getElementById("placeOrder");
+const cartRecommendations = document.getElementById("cartRecommendations");
 
 const formatMoney = (value) => `$${Number(value).toFixed(2)}`;
+const fallbackImage = "https://placehold.co/600x400/f3f4f6/111827?text=Product";
 const getToken = () => localStorage.getItem("accessToken") || "";
-const setToken = (value) => localStorage.setItem("accessToken", value);
 
 const apiRequest = async (url, options = {}) => {
     const token = getToken();
@@ -23,16 +22,28 @@ const apiRequest = async (url, options = {}) => {
     return response.json();
 };
 
-const initToken = () => {
-    if (tokenField) {
-        tokenField.value = getToken();
+const renderRecommendationCards = (products) => {
+    if (!cartRecommendations) {
+        return;
     }
-    if (saveTokenButton) {
-        saveTokenButton.addEventListener("click", () => {
-            setToken(tokenField.value.trim());
-            window.location.reload();
-        });
+    if (!products.length) {
+        cartRecommendations.innerHTML = "<div class=\"empty\">No recommendations yet.</div>";
+        return;
     }
+    cartRecommendations.innerHTML = products
+        .map(
+            (product) => `
+            <article class="recommendation-card">
+                <img src="${product.image_url || fallbackImage}" alt="${product.name}" loading="lazy" />
+                <div>
+                    <strong>${product.name}</strong>
+                    <span>${product.category} - ${formatMoney(product.price)}</span>
+                </div>
+                <a class="btn ghost" href="/products/${product.id}/ui/">View</a>
+            </article>
+        `,
+        )
+        .join("");
 };
 
 const renderCart = (cart, products) => {
@@ -42,6 +53,7 @@ const renderCart = (cart, products) => {
     if (!cart.items.length) {
         cartList.innerHTML = "<div class=\"empty\">Cart is empty.</div>";
         cartTotal.textContent = formatMoney(0);
+        renderRecommendationCards([]);
         return;
     }
 
@@ -70,12 +82,33 @@ const renderCart = (cart, products) => {
     cartTotal.textContent = formatMoney(total);
 };
 
+const renderFrequentlyBoughtTogether = async (cart, products) => {
+    const productIds = (cart.items || []).map((item) => item.product_id);
+    if (!productIds.length) {
+        renderRecommendationCards([]);
+        return;
+    }
+    try {
+        const recommendation = await apiRequest(
+            `/ai/frequently-bought-together/?product_ids=${productIds.join(",")}&limit=5`,
+        );
+        const productMap = Object.fromEntries(products.map((product) => [product.id, product]));
+        const recommendedProducts = (recommendation.product_ids || [])
+            .map((productId) => productMap[productId])
+            .filter(Boolean);
+        renderRecommendationCards(recommendedProducts);
+    } catch (error) {
+        renderRecommendationCards([]);
+    }
+};
+
 const loadCart = async () => {
     const [products, cart] = await Promise.all([
         apiRequest("/products/"),
         apiRequest("/cart/"),
     ]);
     renderCart(cart, products);
+    await renderFrequentlyBoughtTogether(cart, products);
 };
 
 const handleCartEvents = () => {
@@ -123,18 +156,12 @@ const initActions = () => {
     });
 
     placeOrderButton.addEventListener("click", async () => {
-        try {
-            const order = await apiRequest("/orders/from-cart/", { method: "POST" });
-            window.location.href = `/checkout/?order_id=${order.id}`;
-        } catch (error) {
-            alert(error.message);
-        }
+        window.location.href = "/checkout/";
     });
 };
 
-initToken();
 loadCart().catch(() => {
-    cartList.innerHTML = "<div class=\"empty\">Sign in to view cart.</div>";
+    cartList.innerHTML = "<div class=\"empty\">Cart is unavailable.</div>";
 });
 handleCartEvents();
 initActions();

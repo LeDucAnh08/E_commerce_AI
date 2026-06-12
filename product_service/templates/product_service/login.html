@@ -1,0 +1,40 @@
+{% extends "product_service/base.html" %}
+{% load static %}
+
+{% block title %}NovaMart | Sign in{% endblock %}
+
+{% block content %}
+<section class="auth-shell">
+    <form class="auth-card" id="loginForm">
+        <div>
+            <p class="eyebrow">Welcome back</p>
+            <h1>Sign in to NovaMart</h1>
+            <p class="auth-sub">Use your account to keep cart, checkout, and recommendations personalized.</p>
+        </div>
+
+        <label>
+            <span>Username</span>
+            <input id="loginUsername" name="username" type="text" autocomplete="username" required />
+        </label>
+
+        <label>
+            <span>Password</span>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+        </label>
+
+        <div id="loginError" class="form-error" hidden></div>
+        <button class="btn primary" type="submit">Sign in</button>
+
+        <div class="demo-accounts">
+            <div class="recommendation-title">Demo accounts</div>
+            <button type="button" data-demo-user="alice" data-demo-pass="alice123">alice / alice123</button>
+            <button type="button" data-demo-user="bob" data-demo-pass="bob123">bob / bob123</button>
+            <button type="button" data-demo-user="charlie" data-demo-pass="charlie123">charlie / charlie123</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'product_service/js/login.js' %}?v=login-1"></script>
+{% endblock %}

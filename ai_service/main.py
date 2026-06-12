@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
@@ -24,9 +25,12 @@ except Exception:
 
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain_openai import ChatOpenAI
 except Exception:
     ChatGoogleGenerativeAI = None
+
+try:
+    from langchain_openai import ChatOpenAI
+except Exception:
     ChatOpenAI = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,9 +62,19 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class ChatProduct(BaseModel):
+    id: int
+    name: str
+    category: str
+    type: str
+    price: float
+    stock: int
+    image_url: str
+
+
 class ChatResponse(BaseModel):
     reply: str
-    products: list[int]
+    products: list[ChatProduct]
 
 
 ACTION_WEIGHTS = {
@@ -282,11 +296,12 @@ def recommend(
 
 
 def build_llm():
-    """Build LLM from .env (prefer Gemini > OpenAI)."""
+    """Build LLM from .env (prefer Gemini > GitHub Models > OpenAI)."""
     if ChatGoogleGenerativeAI is None and ChatOpenAI is None:
         return None
 
     gemini_key = _env("GEMINI_API_KEY", "")
+    github_token = _env("GITHUB_TOKEN", "")
     openai_key = _env("OPENAI_API_KEY", "")
 
     if gemini_key:
@@ -296,6 +311,19 @@ def build_llm():
                 model=model_name,
                 temperature=0.7,
                 google_api_key=gemini_key,
+            )
+        except Exception:
+            pass
+
+    if github_token and ChatOpenAI is not None:
+        try:
+            model_name = _env("GITHUB_MODEL", "openai/gpt-4o-mini")
+            base_url = _env("GITHUB_MODELS_BASE_URL", "https://models.github.ai/inference")
+            return ChatOpenAI(
+                model=model_name,
+                temperature=0.7,
+                api_key=github_token,
+                base_url=base_url,
             )
         except Exception:
             pass
@@ -363,37 +391,307 @@ def parse_intent_and_entities(message: str) -> tuple[str, dict[str, str]]:
     return intent, entities
 
 
-def retrieve_products_for_chatbot(message: str, limit: int = 5) -> dict[str, Any]:
-    """Retrieve products using vector_store + fallback to graph."""
-    products_data: dict[str, Any] = {"ids": [], "details": {}}
+@lru_cache(maxsize=1)
+def _load_catalog_for_chatbot() -> list[dict[str, Any]]:
+    """Load product catalog from Django's product DB for chatbot retrieval."""
+    try:
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "E_commerce.settings")
+        import django
 
-    if vector_store is None:
-        return products_data
+        django.setup()
+        from product_service.models import Product
+    except Exception:
+        return []
 
     try:
-        if FAISS_INDEX_PATH.exists():
-            result_ids = vector_store.search(message, top_k=limit)
-            products_data["ids"] = result_ids
+        products = (
+            Product.objects.using("product")
+            .select_related("category")
+            .order_by("id")
+        )
+        return [_product_to_chatbot_doc(product) for product in products]
     except Exception:
-        pass
+        return []
+
+
+def _product_to_chatbot_doc(product: Any) -> dict[str, Any]:
+    details: list[str] = []
+    product_type = "general"
+
+    if hasattr(product, "book_details"):
+        product_type = "book"
+        details.extend(
+            [
+                f"author {product.book_details.author}",
+                f"publisher {product.book_details.publisher}",
+                f"isbn {product.book_details.isbn}",
+            ]
+        )
+    elif hasattr(product, "electronics_details"):
+        product_type = "electronics"
+        details.extend(
+            [
+                f"brand {product.electronics_details.brand}",
+                f"warranty {product.electronics_details.warranty} months",
+            ]
+        )
+    elif hasattr(product, "fashion_details"):
+        product_type = "fashion"
+        details.extend(
+            [
+                f"size {product.fashion_details.size}",
+                f"color {product.fashion_details.color}",
+            ]
+        )
+
+    description = " ".join(
+        [
+            product.name,
+            product.category.name,
+            product_type,
+            *details,
+            f"price {product.price}",
+            f"stock {product.stock}",
+        ]
+    )
+    return {
+        "id": int(product.id),
+        "name": product.name,
+        "category": product.category.name,
+        "type": product_type,
+        "price": float(product.price),
+        "stock": int(product.stock),
+        "image_url": product.image_url,
+        "description": description,
+    }
+
+
+def _ensure_product_index(catalog: list[dict[str, Any]]) -> None:
+    if vector_store is None or not catalog:
+        return
+
+    meta_path = BASE_DIR / "product_index_meta.json"
+    expected_ids = [item["id"] for item in catalog]
+    needs_build = not FAISS_INDEX_PATH.exists() or not meta_path.exists()
+
+    if not needs_build:
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            needs_build = meta.get("product_ids") != expected_ids
+        except (OSError, json.JSONDecodeError):
+            needs_build = True
+
+    if needs_build:
+        vector_store.build_index(catalog)
+
+
+def _keyword_product_ids(message: str, catalog: list[dict[str, Any]], limit: int) -> list[int]:
+    query = message.lower()
+    tokens = [token for token in re.findall(r"\w+", query) if len(token) > 2]
+    scored: list[tuple[int, int]] = []
+
+    for product in catalog:
+        haystack = " ".join(
+            [
+                product["name"],
+                product["category"],
+                product["type"],
+                product["description"],
+            ]
+        ).lower()
+        score = sum(1 for token in tokens if token in haystack)
+        if product["category"].lower() in query:
+            score += 3
+        if product["type"].lower() in query:
+            score += 2
+        if score:
+            scored.append((product["id"], score))
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda item: item[1], reverse=True)
+    return [product_id for product_id, _ in scored[:limit]]
+
+
+def _is_product_query(message: str, catalog: list[dict[str, Any]]) -> bool:
+    query = message.lower()
+    shopping_keywords = {
+        "buy",
+        "shop",
+        "shopping",
+        "product",
+        "products",
+        "recommend",
+        "suggest",
+        "compare",
+        "price",
+        "cheap",
+        "expensive",
+        "stock",
+        "book",
+        "books",
+        "electronics",
+        "fashion",
+        "laptop",
+        "headphone",
+        "hoodie",
+        "sneaker",
+        "mua",
+        "ban",
+        "bán",
+        "san pham",
+        "sản phẩm",
+        "goi y",
+        "gợi ý",
+        "de xuat",
+        "đề xuất",
+        "tu van",
+        "tư vấn",
+        "gia",
+        "giá",
+        "re",
+        "rẻ",
+        "dat",
+        "đắt",
+        "so sanh",
+        "so sánh",
+        "sach",
+        "sách",
+        "dien tu",
+        "điện tử",
+        "thoi trang",
+        "thời trang",
+    }
+    if any(keyword in query for keyword in shopping_keywords):
+        return True
+
+    stopwords = {
+        "for",
+        "the",
+        "and",
+        "you",
+        "your",
+        "what",
+        "why",
+        "how",
+        "are",
+        "can",
+        "toi",
+        "tôi",
+        "ban",
+        "bạn",
+        "cho",
+        "hoi",
+        "hỏi",
+        "cua",
+        "của",
+        "nay",
+        "này",
+        "la",
+        "là",
+    }
+    tokens = {
+        token
+        for token in re.findall(r"\w+", query)
+        if len(token) > 2 and token not in stopwords
+    }
+    if not tokens:
+        return False
+
+    for product in catalog:
+        catalog_tokens = {
+            token
+            for token in re.findall(
+                r"\w+",
+                f"{product['name']} {product['category']} {product['type']} {product['description']}".lower(),
+            )
+            if len(token) > 2 and token not in stopwords
+        }
+        if tokens & catalog_tokens:
+            return True
+
+    return False
+
+
+def _chatbot_products_payload(
+    product_ids: list[int],
+    product_details: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    payload = []
+    for product_id in product_ids:
+        product = product_details.get(product_id)
+        if not product:
+            continue
+        payload.append(
+            {
+                "id": product["id"],
+                "name": product["name"],
+                "category": product["category"],
+                "type": product["type"],
+                "price": product["price"],
+                "stock": product["stock"],
+                "image_url": product["image_url"],
+            }
+        )
+    return payload
+
+
+def retrieve_products_for_chatbot(message: str, limit: int = 5) -> dict[str, Any]:
+    """Retrieve catalog products using FAISS, with DB keyword fallback."""
+    products_data: dict[str, Any] = {"ids": [], "details": {}}
+    catalog = _load_catalog_for_chatbot()
+    products_data["details"] = {item["id"]: item for item in catalog}
+
+    if not catalog:
+        return products_data
+
+    if not _is_product_query(message, catalog):
+        return products_data
+
+    if vector_store is not None:
+        try:
+            _ensure_product_index(catalog)
+            if FAISS_INDEX_PATH.exists():
+                result_ids = vector_store.search(message, top_k=limit)
+                valid_ids = {item["id"] for item in catalog}
+                products_data["ids"] = [pid for pid in result_ids if pid in valid_ids][:limit]
+        except Exception:
+            products_data["ids"] = []
+
+    if not products_data["ids"]:
+        products_data["ids"] = _keyword_product_ids(message, catalog, limit)
 
     return products_data
 
 
-def generate_chatbot_reply(message: str, products_ids: list[int]) -> str:
+def generate_chatbot_reply(
+    message: str,
+    products_ids: list[int],
+    product_details: dict[int, dict[str, Any]] | None = None,
+) -> str:
     """Generate natural language reply using LLM."""
     llm = build_llm()
+    product_details = product_details or {}
+    products = [product_details[pid] for pid in products_ids if pid in product_details]
 
     if llm is None:
-        return f"Chúng tôi tìm thấy {len(products_ids)} sản phẩm phù hợp cho yêu cầu của bạn. Vui lòng xem danh sách trên."
+        if not products:
+            return "Mình chưa kết nối được LLM nên hiện chỉ hỗ trợ tìm sản phẩm. Bạn kiểm tra GITHUB_TOKEN và cài dependency LLM rồi restart ai-service nhé."
+        names = ", ".join(product["name"] for product in products[:3])
+        return f"Mình tìm thấy {len(products)} sản phẩm phù hợp: {names}. Bạn xem danh sách sản phẩm bên dưới nhé."
 
     # Build context from products
     product_context = ""
-    if products_ids:
-        product_context = f"\n\nCánh được tìm thấy: {', '.join(map(str, products_ids))}"
+    if products:
+        lines = [
+            f"- {product['name']} (ID {product['id']}), {product['category']}, price {product['price']}, {product['description']}"
+            for product in products
+        ]
+        product_context = "\n\nProducts found:\n" + "\n".join(lines)
 
     # Prompt for LLM
-    prompt = f"""Bạn là trợ lý bán hàng thân thiện của một cửa hàng điện tử. Hãy trả lời câu hỏi của khách hàng một cách ngắn gọn, chuyên nghiệp và hữu ích.
+    prompt = f"""Bạn là trợ lý bán hàng thân thiện của một cửa hàng thương mại điện tử. Hãy trả lời câu hỏi của khách hàng một cách ngắn gọn, chuyên nghiệp và hữu ích.
 
 Câu hỏi khách hàng: {message}
 {product_context}
@@ -404,7 +702,7 @@ Trả lời (tiếng Việt, tối đa 150 từ):"""
         response = llm.invoke(prompt)
         return response.content if hasattr(response, "content") else str(response)
     except Exception as e:
-        return f"Tôi xin lỗi, không thể tạo trả lời chi tiết lúc này. Vui lòng thử lại sau. ({str(e)[:50]})"
+        return f"Mình chưa tạo được câu trả lời chi tiết lúc này. Bạn thử lại sau nhé. ({str(e)[:50]})"
 
 
 @app.post("/chatbot", response_model=ChatResponse)
@@ -419,11 +717,11 @@ def chatbot(request: ChatRequest):
     products_data = retrieve_products_for_chatbot(message, limit=5)
     product_ids = products_data.get("ids", [])
 
-    reply = generate_chatbot_reply(message, product_ids)
+    reply = generate_chatbot_reply(message, product_ids, products_data.get("details", {}))
 
     return {
         "reply": reply,
-        "products": product_ids,
+        "products": _chatbot_products_payload(product_ids, products_data.get("details", {})),
     }
 
 

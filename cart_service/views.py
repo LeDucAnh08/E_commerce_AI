@@ -7,6 +7,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Cart, CartItem
 
+GUEST_USER_ID = 0
+
 
 def _bad_request(message: str, status: int = 400) -> JsonResponse:
     return JsonResponse({"error": message}, status=status)
@@ -48,6 +50,13 @@ def _get_authenticated_customer(request):
     return int(user_id), None
 
 
+def _get_cart_user_id(request):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return GUEST_USER_ID, None
+    return _get_authenticated_customer(request)
+
+
 def _get_cart(user_id: int) -> Cart:
     cart, _ = Cart.objects.get_or_create(user_id=user_id)
     return cart
@@ -77,7 +86,7 @@ def add_to_cart(request):
     if request.method != "POST":
         return _bad_request("Method not allowed", status=405)
 
-    user_id, auth_error = _get_authenticated_customer(request)
+    user_id, auth_error = _get_cart_user_id(request)
     if auth_error:
         return auth_error
 
@@ -112,7 +121,7 @@ def cart_detail(request):
     if request.method != "GET":
         return _bad_request("Method not allowed", status=405)
 
-    user_id, auth_error = _get_authenticated_customer(request)
+    user_id, auth_error = _get_cart_user_id(request)
     if auth_error:
         return auth_error
 
@@ -125,7 +134,7 @@ def update_cart_item(request, item_id: int):
     if request.method != "PUT":
         return _bad_request("Method not allowed", status=405)
 
-    user_id, auth_error = _get_authenticated_customer(request)
+    user_id, auth_error = _get_cart_user_id(request)
     if auth_error:
         return auth_error
 
@@ -156,7 +165,7 @@ def remove_from_cart(request, item_id: int):
     if request.method != "DELETE":
         return _bad_request("Method not allowed", status=405)
 
-    user_id, auth_error = _get_authenticated_customer(request)
+    user_id, auth_error = _get_cart_user_id(request)
     if auth_error:
         return auth_error
 
@@ -173,7 +182,7 @@ def clear_cart(request):
     if request.method != "DELETE":
         return _bad_request("Method not allowed", status=405)
 
-    user_id, auth_error = _get_authenticated_customer(request)
+    user_id, auth_error = _get_cart_user_id(request)
     if auth_error:
         return auth_error
 

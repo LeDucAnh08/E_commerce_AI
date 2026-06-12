@@ -13,8 +13,13 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+import pymysql
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+pymysql.install_as_MySQLdb()
 
 
 # Quick-start development settings - unsuitable for production
@@ -86,10 +91,27 @@ WSGI_APPLICATION = 'E_commerce.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.getenv('MYSQL_DB_NAME', ''),
+        'USER': os.getenv('MYSQL_DB_USER', ''),
+        'PASSWORD': os.getenv('MYSQL_DB_PASSWORD', ''),
+        'HOST': os.getenv('MYSQL_DB_HOST', ''),
+        'PORT': os.getenv('MYSQL_DB_PORT', '3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
+    },
+    'product': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('PRODUCT_DB_NAME', ''),
+        'USER': os.getenv('PRODUCT_DB_USER', ''),
+        'PASSWORD': os.getenv('PRODUCT_DB_PASSWORD', ''),
+        'HOST': os.getenv('PRODUCT_DB_HOST', ''),
+        'PORT': os.getenv('PRODUCT_DB_PORT', '5432'),
+    },
 }
+
+DATABASE_ROUTERS = ['E_commerce.db_router.ServiceDatabaseRouter']
 
 
 # Password validation

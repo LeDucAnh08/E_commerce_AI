@@ -5,6 +5,8 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
+from order_service.models import Order
+
 from .models import Payment
 
 
@@ -82,8 +84,13 @@ def pay(request):
     payment = Payment.objects.create(
         order_id=order_id,
         amount=amount,
-        status=Payment.STATUS_PENDING,
+        status=Payment.STATUS_SUCCESS,
     )
+
+    order = Order.objects.filter(id=order_id, user_id=int(payload["sub"])).first()
+    if order:
+        order.status = "paid"
+        order.save(update_fields=["status"])
 
     return JsonResponse(_serialize_payment(payment), status=201)
 

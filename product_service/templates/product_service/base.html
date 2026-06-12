@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}NovaMart{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'product_service/css/shop.css' %}" />
+    <link rel="stylesheet" href="{% static 'product_service/css/shop.css' %}?v=paid-orders-1" />
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -21,19 +21,68 @@
             <a href="/" class="nav-link">Home</a>
             <a href="/cart/ui/" class="nav-link">Cart</a>
             <a href="/checkout/" class="nav-link">Checkout</a>
+            <a href="/shipping/track/" class="nav-link">Track</a>
         </nav>
-        <div class="token-box">
-            <input id="accessToken" type="password" placeholder="Access token" autocomplete="off" />
-            <button id="saveToken" class="btn ghost">Save</button>
+        <div class="login-box" aria-label="Account">
+            <a class="btn ghost" id="authAction" href="/login/">Sign in</a>
+            <div class="user-chip">
+                <span class="user-avatar" id="userAvatar" aria-hidden="true">G</span>
+                <span class="user-name" id="userName">Guest</span>
+            </div>
         </div>
     </header>
     <main class="page">
         {% block content %}{% endblock %}
     </main>
+    <aside class="chatbot-widget" id="chatbotWidget" aria-label="AI shopping assistant">
+        <div class="chatbot-panel" id="chatbotPanel" aria-hidden="true" hidden>
+            <div class="chatbot-header">
+                <span class="chatbot-mark" aria-hidden="true"></span>
+                <div>
+                    <div class="chatbot-title">Nova Assistant</div>
+                    <div class="chatbot-status">We're online ...</div>
+                </div>
+                <button class="chatbot-icon-button" id="chatbotRefresh" type="button" aria-label="Refresh chat">R</button>
+                <button class="chatbot-close" id="chatbotClose" type="button" aria-label="Close chatbot">x</button>
+            </div>
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="chatbot-date-divider">
+                    <span></span>
+                    <time>Today</time>
+                    <span></span>
+                </div>
+                <div class="chat-message bot">
+                    Hi there! I can help you find products, compare options, and pick the right item.
+                </div>
+                <div class="chatbot-quick-replies" aria-label="Quick replies">
+                    <button type="button" data-chat-prompt="Yes, recommend something for me">Yes, sure!</button>
+                    <button type="button" data-chat-prompt="No thanks, show popular products">No, thanks!</button>
+                </div>
+            </div>
+            <div class="chatbot-prompts" aria-label="Suggested questions">
+                <button type="button" data-chat-prompt="What are your most popular products?">What are your most popular products?</button>
+            </div>
+            <form class="chatbot-form" id="chatbotForm">
+                <div class="chatbot-input-shell">
+                    <input id="chatbotInput" type="text" placeholder="Enter message" autocomplete="off" />
+                    <button class="chatbot-send" type="submit" aria-label="Send message">&gt;</button>
+                </div>
+                <div class="chatbot-tools" aria-label="Message tools">
+                    <button type="button" aria-label="Emoji picker">:)</button>
+                    <button type="button" aria-label="Attach file">A</button>
+                </div>
+            </form>
+        </div>
+        <button class="chatbot-launcher" id="chatbotToggle" type="button" aria-label="Open chatbot">
+            <span class="chatbot-launcher-icon" aria-hidden="true"></span>
+        </button>
+    </aside>
     <footer class="site-footer">
         <div>NovaMart Commerce Suite</div>
         <div class="footer-meta">Secure orders · Fast fulfillment · Trusted brands</div>
     </footer>
     {% block scripts %}{% endblock %}
+    <script src="{% static 'product_service/js/account.js' %}?v=login-1"></script>
+    <script src="{% static 'product_service/js/chatbot.js' %}?v=chatbot-products-1"></script>
 </body>
 </html>

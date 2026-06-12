@@ -12,6 +12,7 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     price = models.FloatField()
     stock = models.IntegerField()
+    image_url = models.URLField(blank=True, default="")
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
 
     def __str__(self):

@@ -1,0 +1,24 @@
+{% extends "product_service/base.html" %}
+{% load static %}
+
+{% block title %}NovaMart | Product detail{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div id="productDetail" data-product-id="{{ product_id }}"></div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Similar products</h2>
+            <p>Recommendations based on category and product type.</p>
+        </div>
+    </div>
+    <div id="similarProducts" class="recommendation-grid"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'product_service/js/product_detail.js' %}?v=ai-recommendations-1"></script>
+{% endblock %}
